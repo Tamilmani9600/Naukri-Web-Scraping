@@ -1,0 +1,117 @@
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
+from webdriver_manager.chrome import ChromeDriverManager
+import pandas as pd
+import time
+import argparse
+
+# Parse command-line arguments; default role is data-scientist
+parser = argparse.ArgumentParser(description="Scrape job listings from Naukri.com")
+parser.add_argument(
+    "--role",
+    type=str,
+    default="data-scientist",
+    help="Job role to search for (default: data-scientist)",
+)
+args = parser.parse_args()
+
+job_role_slug = args.role.strip().replace(" ", "-")
+
+# Generate output filename from the role
+safe_role = job_role_slug.replace("-", "_")
+excel_file = f"naukri_{safe_role}_jobs.xlsx"
+
+driver = webdriver.Chrome(
+    service=Service(ChromeDriverManager().install())
+)
+
+jobs = {
+    "job_no": [],
+    "roles": [],
+    "companies": [],
+    "locations": [],
+    "experience": [],
+    "salaries": [],
+    "skills": []
+}
+
+# ==============================
+# Scrape Naukri Data Scientist jobs
+# ==============================
+for page in range(1, 21):  # Pages 1 to 20
+    url = f"https://www.naukri.com/{job_role_slug}-jobs-{page}"
+    driver.get(url)
+    time.sleep(3)
+
+    job_cards = driver.find_elements(By.CLASS_NAME, "srp-jobtuple-wrapper")
+
+    for index, job in enumerate(job_cards):
+        job_no = (page - 1) * len(job_cards) + index + 1
+
+        # Default values
+        role = company = location = exp = salary = skill = "NA"
+
+        try:
+            role = job.find_element(By.CLASS_NAME, "title").text
+        except NoSuchElementException:
+            pass
+
+        try:
+            company = job.find_element(By.CLASS_NAME, "comp-name").text
+        except NoSuchElementException:
+            pass
+
+        try:
+            location = job.find_element(By.CLASS_NAME, "loc-wrap").text
+        except NoSuchElementException:
+            pass
+
+        try:
+            exp = job.find_element(By.CLASS_NAME, "exp-wrap").text
+        except NoSuchElementException:
+            pass
+
+        try:
+            salary = job.find_element(By.CLASS_NAME, "sal-wrap").text
+        except NoSuchElementException:
+            pass
+
+        # Extract skills
+        try:
+            skill_ul = job.find_element(By.CLASS_NAME, "tags-gt")
+            skill_li = skill_ul.find_elements(By.TAG_NAME, "li")
+            skill_list = [li.text for li in skill_li]
+            skill = ", ".join(skill_list)
+        except NoSuchElementException:
+            skill = "NA"
+
+        # Append data to dictionary
+        jobs["job_no"].append(job_no)
+        jobs["roles"].append(role)
+        jobs["companies"].append(company)
+        jobs["locations"].append(location)
+        jobs["experience"].append(exp)
+        jobs["salaries"].append(salary)
+        jobs["skills"].append(skill)
+
+# ==============================
+# Convert dictionary to DataFrame
+# ==============================
+df_raw = pd.DataFrame(jobs)
+
+# Preview data
+print(df_raw.head(10))
+
+# ==============================
+# Close the browser
+# ==============================
+driver.quit()
+
+# ==============================
+# Save DataFrame to Excel
+# ==============================
+df_raw.to_excel(excel_file, index=False)
+
+print(f"✅ Excel file created successfully: {excel_file}")
