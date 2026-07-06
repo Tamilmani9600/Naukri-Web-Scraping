@@ -67,7 +67,7 @@ pip install selenium webdriver-manager pandas
 ## ▶️ How to Run the Script
 
 ```bash
-python naukri_scraper.py
+python naukri.py --role "ETL"
 ```
 
 After execution:
